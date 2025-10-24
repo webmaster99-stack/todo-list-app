@@ -4,7 +4,10 @@ from app.database import get_db
 from app.schemas.user import UserCreate, UserResponse
 from app.schemas.auth import Token, LoginRequest
 from app.services.auth import create_user, authenticate_user
-from app.utils.security import create_token_for_user
+from app.utils.security import create_token_for_user, get_user_id_from_token, get_token_expiry
+from app.utils.token_blacklist import token_blacklist
+from app.api.deps import get_current_user, get_current_token
+from app.models.user import User
 
 router = APIRouter()
 
@@ -73,3 +76,44 @@ def login(
     access_token = create_token_for_user(str(user.id), user.username)
     
     return Token(access_token=access_token, token_type="bearer")
+
+
+@router.post("/refresh", response_model=Token)
+def refresh_token(
+    current_user: User = Depends(get_current_user),
+    current_token: str = Depends(get_current_token)
+):
+    """
+    Refresh access token.
+    
+    Requires a valid (non-expired, non-blacklisted) JWT token.
+    Returns a new JWT token and blacklists the old one.
+    """
+    # Blacklist the old token
+    token_expiry = get_token_expiry(current_token)
+    if token_expiry:
+        token_blacklist.add(current_token, token_expiry)
+    
+    # Create new token
+    new_token = create_token_for_user(str(current_user.id), current_user.username)
+    
+    return Token(access_token=new_token, token_type="bearer")
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout(
+    current_token: str = Depends(get_current_token),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Logout the current user.
+    
+    Blacklists the current token to prevent further use.
+    """
+    # Get token expiry and add to blacklist
+    token_expiry = get_token_expiry(current_token)
+    if token_expiry:
+        token_blacklist.add(current_token, token_expiry)
+    
+    # 204 No Content - successful logout with no response body
+    return None

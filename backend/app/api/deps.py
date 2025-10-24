@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from typing import Generator
 from app.database import get_db
 from app.utils.security import get_user_id_from_token
+from app.utils.token_blacklist import token_blacklist
 from app.services.auth import get_user_by_id
 from app.models.user import User
 
@@ -26,9 +27,17 @@ def get_current_user(
         Current authenticated User object
         
     Raises:
-        HTTPException: If token is invalid or user not found
+        HTTPException: If token is invalid, blacklisted, or user not found
     """
     token = credentials.credentials
+    
+    # Check if token is blacklisted
+    if token_blacklist.is_blacklisted(token):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has been revoked",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     
     # Decode token to get user ID
     user_id = get_user_id_from_token(token)
@@ -55,3 +64,18 @@ def get_current_user(
         )
     
     return user
+
+
+def get_current_token(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+) -> str:
+    """
+    Dependency to extract the current JWT token.
+    
+    Args:
+        credentials: HTTP Authorization credentials with bearer token
+        
+    Returns:
+        JWT token string
+    """
+    return credentials.credentials

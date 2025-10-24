@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 from jose import JWTError, jwt
 import bcrypt
@@ -77,9 +77,9 @@ def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta]
     
     # Set expiration time
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     
     # Add expiration to token payload
     to_encode.update({"exp": expire})
@@ -155,4 +155,21 @@ def get_user_id_from_token(token: str) -> Optional[str]:
     payload = decode_access_token(token)
     if payload:
         return payload.get("sub")
+    return None
+
+
+def get_token_expiry(token: str) -> Optional[datetime]:
+    """
+    Extract expiry time from a JWT token.
+    
+    Args:
+        token: JWT token string
+        
+    Returns:
+        Expiry datetime if token is valid, None otherwise
+    """
+    payload = decode_access_token(token)
+    if payload and 'exp' in payload:
+        # JWT exp is in Unix timestamp (seconds since epoch)
+        return datetime.fromtimestamp(payload["exp"], tz=timezone.utc)
     return None

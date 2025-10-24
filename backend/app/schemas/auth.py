@@ -33,3 +33,15 @@ class LoginRequest(BaseModel):
                 "password": "SecurePass123"
             }
         }
+
+
+class MessageResponse(BaseModel):
+    """Generic message response."""
+    message: str
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "message": "Operation successful"
+            }
+        }
