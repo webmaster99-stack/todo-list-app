@@ -2,8 +2,15 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.schemas.user import UserCreate, UserResponse
-from app.schemas.auth import Token, LoginRequest
-from app.services.auth import create_user, authenticate_user
+from app.schemas.auth import (
+    Token, 
+    LoginRequest, 
+    MessageResponse, 
+    PasswordResetRequest, 
+    PasswordResetConfirm,
+    PasswordResetResponse
+)
+from app.services.auth import create_user, authenticate_user, get_user_by_username
 from app.utils.security import create_token_for_user, get_user_id_from_token, get_token_expiry
 from app.utils.token_blacklist import token_blacklist
 from app.api.deps import get_current_user, get_current_token
@@ -117,3 +124,77 @@ def logout(
     
     # 204 No Content - successful logout with no response body
     return None
+
+
+@router.post("/request-password-reset", response_model=PasswordResetResponse)
+def request_password_reset(
+    reset_request: PasswordResetRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Request a password reset token.
+    
+    Sends a password reset link to the user (simulated via console for now).
+    Always returns success message to prevent username enumeration.
+    """
+    from app.services.password_reset import create_reset_token
+    from app.schemas.auth import PasswordResetResponse
+    
+    # Look up user
+    user = get_user_by_username(db, reset_request.username)
+    
+    # Always return success message (prevent username enumeration)
+    response_message = "If the username exists, a password reset link has been sent."
+    
+    if user and user.is_active:
+        # Create reset token
+        reset_token = create_reset_token(db, user, expiry_hours=1)
+        
+        # In production, send email here
+        # For now, print to console
+        reset_link = f"http://localhost:5173/reset-password?token={reset_token.token}"
+        print("\n" + "="*80)
+        print("PASSWORD RESET REQUESTED")
+        print("="*80)
+        print(f"User: {user.username}")
+        print(f"Token: {reset_token.token}")
+        print(f"Reset Link: {reset_link}")
+        print(f"Expires: {reset_token.expires_at}")
+        print("="*80 + "\n")
+        
+        # TODO: Replace with actual email sending
+        # send_email(
+        #     to=user.email,
+        #     subject="Password Reset Request",
+        #     body=f"Click here to reset your password: {reset_link}"
+        # )
+    
+    return PasswordResetResponse(message=response_message)
+
+
+@router.post("/reset-password", response_model=MessageResponse)
+def reset_password(
+    reset_data: PasswordResetConfirm,
+    db: Session = Depends(get_db)
+):
+    """
+    Reset password using a valid reset token.
+    
+    The token must be:
+    - Valid (exists in database)
+    - Not expired (within 1 hour)
+    - Not used previously
+    """
+    from app.services.password_reset import use_reset_token
+    from app.schemas.auth import MessageResponse
+    
+    # Attempt to use the reset token
+    success = use_reset_token(db, reset_data.token, reset_data.new_password)
+    
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset token"
+        )
+    
+    return MessageResponse(message="Password has been reset successfully")

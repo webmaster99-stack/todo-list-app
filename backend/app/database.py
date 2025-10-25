@@ -35,7 +35,7 @@ def init_db():
     Should be called on application startup.
     """
     # Import all models here to ensure they're registered with SQLAlchemy
-    from app.models import User  # noqa: F401
+    from app.models import User, PasswordResetToken  # noqa: F401
     
     # Create all tables
     Base.metadata.create_all(bind=engine)
