@@ -171,5 +171,6 @@ def get_token_expiry(token: str) -> Optional[datetime]:
     payload = decode_access_token(token)
     if payload and 'exp' in payload:
         # JWT exp is in Unix timestamp (seconds since epoch)
-        return datetime.fromtimestamp(payload["exp"], tz=timezone.utc)
+        # Return as timezone-aware datetime
+        return datetime.fromtimestamp(payload['exp'], tz=timezone.utc)
     return None

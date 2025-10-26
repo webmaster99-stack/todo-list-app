@@ -33,7 +33,7 @@ def create_reset_token(db: Session, user: User, expiry_hours: int = 1) -> Passwo
     # Generate unique token
     token_string = generate_reset_token()
     
-    # Calculate expiry time
+    # Calculate expiry time (timezone-aware)
     expires_at = datetime.now(timezone.utc) + timedelta(hours=expiry_hours)
     
     # Create token record
@@ -87,8 +87,17 @@ def validate_reset_token(db: Session, token: str) -> Optional[User]:
     if not reset_token:
         return None
     
+    # Get current time (timezone-aware)
+    now = datetime.now(timezone.utc)
+    
+    # Convert expires_at to timezone-aware if it's naive
+    expires_at = reset_token.expires_at
+    if expires_at.tzinfo is None:
+        # If stored as naive, treat it as UTC
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    
     # Check if token has expired
-    if reset_token.expires_at < datetime.now(timezone.utc):
+    if expires_at < now:
         return None
     
     # Check if token has been used
@@ -166,16 +175,24 @@ def cleanup_expired_tokens(db: Session) -> int:
     Returns:
         Number of tokens deleted
     """
+    # Get current time (timezone-aware)
     now = datetime.now(timezone.utc)
     
-    expired_tokens = db.query(PasswordResetToken).filter(
-        PasswordResetToken.expires_at < now
-    ).all()
+    # Query for expired tokens
+    expired_tokens = db.query(PasswordResetToken).all()
     
-    count = len(expired_tokens)
-    
+    deleted_count = 0
     for token in expired_tokens:
-        db.delete(token)
+        expires_at = token.expires_at
+        
+        # Convert to timezone-aware if naive
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        
+        # Delete if expired
+        if expires_at < now:
+            db.delete(token)
+            deleted_count += 1
     
     db.commit()
-    return count
+    return deleted_count
