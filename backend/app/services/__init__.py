@@ -6,6 +6,7 @@ from app.services.password_reset import (
     invalidate_user_tokens,
     cleanup_expired_tokens
 )
+from app.services.user import update_user_profile, deactivate_user, delete_user
 
 __all__ = [
     "create_user",
@@ -15,5 +16,8 @@ __all__ = [
     "validate_reset_token",
     "use_reset_token",
     "invalidate_user_tokens",
-    "cleanup_expired_tokens"
+    "cleanup_expired_tokens",
+    "update_user_profile",
+    "deactivate_user",
+    "delete_user"
 ]

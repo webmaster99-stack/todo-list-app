@@ -72,12 +72,12 @@ class UserUpdate(BaseModel):
         None,
         min_length=3,
         max_length=50,
-        description="New username"
+        description="New username (optional)"
     )
     password: Optional[str] = Field(
         None,
         min_length=8,
-        description="New password"
+        description="New password (optional)"
     )
     
     @field_validator('username')
@@ -99,3 +99,11 @@ class UserUpdate(BaseModel):
             if not is_valid:
                 raise ValueError(error_msg)
         return v
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "username": "newusername",
+                "password": "NewSecurePass123"
+            }
+        }
