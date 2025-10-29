@@ -107,3 +107,18 @@ class UserUpdate(BaseModel):
                 "password": "NewSecurePass123"
             }
         }
+
+
+class UserDelete(BaseModel):
+    """Schema for account deletion confirmation."""
+    password: str = Field(
+        ...,
+        description="Current password for confirmation"
+    )
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "password": "MyCurrentPassword123"
+            }
+        }
