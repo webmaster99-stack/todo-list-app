@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from app.config import settings
@@ -9,6 +9,15 @@ engine = create_engine(
     connect_args={"check_same_thread": False} if "sqlite" in settings.DATABASE_URL else {},
     echo=settings.DEBUG  # Log SQL queries in debug mode
 )
+
+# Enable foreign key support for SQLite
+if "sqlite" in settings.DATABASE_URL:
+    @event.listens_for(engine, "connect")
+    def set_sqlite_pragma(dbapi_conn, connection_record):
+        cursor = dbapi_conn.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
 
 # Create SessionLocal class for database sessions
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -35,7 +44,7 @@ def init_db():
     Should be called on application startup.
     """
     # Import all models here to ensure they're registered with SQLAlchemy
-    from app.models import User, PasswordResetToken  # noqa: F401
+    from app.models import user, password_reset  # noqa: F401
     
     # Create all tables
     Base.metadata.create_all(bind=engine)

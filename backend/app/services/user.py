@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from typing import Optional
 from app.models.user import User
+from app.models.password_reset import PasswordResetToken
 from app.schemas.user import UserUpdate
 from app.utils.security import hash_password
 from app.services.auth import get_user_by_username
@@ -75,9 +76,21 @@ def delete_user(db: Session, user: User) -> None:
     """
     Permanently delete a user account (hard delete).
     
+    Manually deletes related records before deleting user
+    to ensure cascade works on all databases (including SQLite).
+    
     Args:
         db: Database session
         user: User object to delete
     """
+    # Manually delete related password reset tokens
+    # This ensures cascade delete works even if foreign keys aren't enforced
+    db.query(PasswordResetToken).filter(
+        PasswordResetToken.user_id == user.id
+    ).delete(synchronize_session=False)
+    
+    # Delete the user
     db.delete(user)
+    
+    # Commit all changes
     db.commit()
