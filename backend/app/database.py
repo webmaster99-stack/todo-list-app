@@ -18,7 +18,6 @@ if "sqlite" in settings.DATABASE_URL:
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
 
-
 # Create SessionLocal class for database sessions
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -44,7 +43,7 @@ def init_db():
     Should be called on application startup.
     """
     # Import all models here to ensure they're registered with SQLAlchemy
-    from app.models import user, password_reset  # noqa: F401
+    from app.models import user, password_reset, todo  # noqa: F401
     
     # Create all tables
     Base.metadata.create_all(bind=engine)

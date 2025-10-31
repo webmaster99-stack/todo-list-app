@@ -83,10 +83,18 @@ def delete_user(db: Session, user: User) -> None:
         db: Database session
         user: User object to delete
     """
-    # Manually delete related password reset tokens
-    # This ensures cascade delete works even if foreign keys aren't enforced
+    # Import here to avoid circular dependency
+    from app.models.todo import Todo
+    
+    # Manually delete related records
+    # Password reset tokens
     db.query(PasswordResetToken).filter(
         PasswordResetToken.user_id == user.id
+    ).delete(synchronize_session=False)
+    
+    # Todos
+    db.query(Todo).filter(
+        Todo.user_id == user.id
     ).delete(synchronize_session=False)
     
     # Delete the user
