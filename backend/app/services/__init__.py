@@ -7,6 +7,7 @@ from app.services.password_reset import (
     cleanup_expired_tokens
 )
 from app.services.user import update_user_profile, deactivate_user, delete_user
+from app.services.todo import create_todo, get_todo_by_id
 
 __all__ = [
     "create_user",
@@ -19,5 +20,7 @@ __all__ = [
     "cleanup_expired_tokens",
     "update_user_profile",
     "deactivate_user",
-    "delete_user"
+    "delete_user",
+    "create_todo",
+    "get_todo_by_id"
 ]
