@@ -6,7 +6,9 @@ from app.schemas.todo import (
     TodoCreate, 
     TodoResponse, 
     TodoListResponse,
-    PaginationMetadata
+    PaginationMetadata,
+    SortField,
+    SortOrder
 )
 from app.api.deps import get_current_user
 from app.models.user import User
@@ -59,12 +61,14 @@ def create_new_todo(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An error occurred while creating todo: {str(e)}"
         )
-    
+
 
 @router.get("/", response_model=TodoListResponse)
 def list_todos(
     page: int = Query(1, ge=1, description="Page number (starts at 1)"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page (max 100)"),
+    sort_by: SortField = Query(SortField.CREATED_AT, description="Field to sort by"),
+    sort_order: SortOrder = Query(SortOrder.DESC, description="Sort order (asc or desc)"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -75,17 +79,26 @@ def list_todos(
     
     - **page**: Page number (default: 1, minimum: 1)
     - **page_size**: Items per page (default: 20, minimum: 1, maximum: 100)
+    - **sort_by**: Field to sort by (default: created_at)
+      - created_at: Sort by creation date
+      - due_date: Sort by due date
+      - priority: Sort by priority (high > medium > low > none)
+    - **sort_order**: Sort order (default: desc)
+      - asc: Ascending (oldest/earliest/lowest first)
+      - desc: Descending (newest/latest/highest first)
     
     Returns paginated list of todos with metadata.
     """
     try:
-        # Get todos (only uncompleted)
+        # Get todos (only uncompleted, with sorting)
         todos, total = get_user_todos(
             db, 
             str(current_user.id), 
             page=page, 
             page_size=page_size,
-            only_uncompleted=True
+            only_uncompleted=True,
+            sort_by=sort_by,
+            sort_order=sort_order
         )
         
         # Convert todos to response format

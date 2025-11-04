@@ -1,7 +1,19 @@
 from pydantic import BaseModel, Field, field_validator
 from datetime import date, datetime
 from typing import Optional, List
+from enum import Enum
 from app.models.todo import PriorityLevel
+
+
+class SortField(str, Enum):
+    CREATED_AT = "created_at"
+    DUE_DATE = "due_date"
+    PRIORITY = "priority"
+
+
+class SortOrder(str, Enum):
+    ASC = "asc"
+    DESC = "desc"
 
 
 class TodoCreate(BaseModel):

@@ -1,8 +1,9 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import case
 from typing import Optional, Tuple, List
-from app.models.todo import Todo
+from app.models.todo import Todo, PriorityLevel
 from app.models.user import User
-from app.schemas.todo import TodoCreate
+from app.schemas.todo import TodoCreate, SortField, SortOrder
 import math
 
 
@@ -58,10 +59,12 @@ def get_user_todos(
     user_id: str,
     page: int = 1,
     page_size: int = 20,
-    only_uncompleted: bool = True
+    only_uncompleted: bool = True,
+    sort_by: SortField = SortField.CREATED_AT,
+    sort_order: SortOrder = SortOrder.DESC
 ) -> Tuple[List[Todo], int]:
     """
-    Get paginated todos for a user.
+    Get paginated and sorted todos for a user.
     
     Args:
         db: Database session
@@ -69,6 +72,8 @@ def get_user_todos(
         page: Page number (1-based)
         page_size: Number of items per page
         only_uncompleted: If True, only return uncompleted todos
+        sort_by: Field to sort by (created_at, due_date, priority)
+        sort_order: Sort order (asc or desc)
         
     Returns:
         Tuple of (list of todos, total count)
@@ -80,7 +85,32 @@ def get_user_todos(
     if only_uncompleted:
         query = query.filter(Todo.is_completed == False)
     
-    # Get total count
+    # Apply sorting
+    if sort_by == SortField.CREATED_AT:
+        sort_column = Todo.created_at
+    elif sort_by == SortField.DUE_DATE:
+        sort_column = Todo.due_date
+    elif sort_by == SortField.PRIORITY:
+        # Custom sorting for priority: HIGH > MEDIUM > LOW > NULL
+        # When ascending: NULL, LOW, MEDIUM, HIGH
+        # When descending: HIGH, MEDIUM, LOW, NULL
+        priority_order = case(
+            (Todo.priority == PriorityLevel.HIGH, 3),
+            (Todo.priority == PriorityLevel.MEDIUM, 2),
+            (Todo.priority == PriorityLevel.LOW, 1),
+            else_=0  # NULL values
+        )
+        sort_column = priority_order
+    else:
+        sort_column = Todo.created_at
+    
+    # Apply sort order
+    if sort_order == SortOrder.DESC:
+        query = query.order_by(sort_column.desc())
+    else:
+        query = query.order_by(sort_column.asc())
+    
+    # Get total count before pagination
     total = query.count()
     
     # Apply pagination
