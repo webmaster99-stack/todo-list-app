@@ -3,7 +3,7 @@ from sqlalchemy import case
 from typing import Optional, Tuple, List
 from app.models.todo import Todo, PriorityLevel
 from app.models.user import User
-from app.schemas.todo import TodoCreate, SortField, SortOrder
+from app.schemas.todo import TodoCreate, SortField, SortOrder, TodoUpdate
 import math
 
 
@@ -52,6 +52,42 @@ def get_todo_by_id(db: Session, todo_id: str, user_id: str) -> Optional[Todo]:
         Todo.id == todo_id,
         Todo.user_id == user_id
     ).first()
+
+
+def update_todo(
+    db: Session,
+    todo: Todo,
+    update_data: TodoUpdate
+) -> Todo:
+    """
+    Update a todo with new data.
+    
+    Args:
+        db: Database session
+        todo: Todo object to update
+        update_data: TodoUpdate schema with new values
+        
+    Returns:
+        Updated Todo object
+        
+    Raises:
+        ValueError: If no fields provided for update
+    """
+    # Check if at least one field is being updated
+    update_dict = update_data.model_dump(exclude_unset=True)
+    
+    if not update_dict:
+        raise ValueError("At least one field must be provided for update")
+    
+    # Update fields
+    for field, value in update_dict.items():
+        setattr(todo, field, value)
+    
+    # Commit changes (updated_at will be automatically updated)
+    db.commit()
+    db.refresh(todo)
+    
+    return todo
 
 
 def get_user_todos(

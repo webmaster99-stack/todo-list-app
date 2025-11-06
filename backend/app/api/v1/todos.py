@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from typing import List
 from uuid import UUID
 from app.database import get_db
 from app.schemas.todo import (
@@ -9,14 +8,16 @@ from app.schemas.todo import (
     TodoListResponse,
     PaginationMetadata,
     SortField,
-    SortOrder
+    SortOrder,
+    TodoUpdate
 )
 from app.api.deps import get_current_user
 from app.models.user import User
 from app.services.todo import (
     create_todo,
     get_todo_by_id, 
-    get_user_todos, 
+    get_user_todos,
+    update_todo,
     calculate_total_pages
 )
 
@@ -181,3 +182,65 @@ def get_todo(
     }
     
     return TodoResponse(**todo_dict)
+
+
+@router.put("/{todo_id}", response_model=TodoResponse)
+def update_todo_endpoint(
+    todo_id: UUID,
+    update_data: TodoUpdate = ...,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Update a todo.
+    
+    Requires authentication. Users can only update their own todos.
+    All fields are optional - provide only the fields you want to update.
+    
+    - **title**: New title (optional, max 200 characters)
+    - **description**: New description (optional)
+    - **priority**: New priority (optional, must be 'low', 'medium', or 'high')
+    - **due_date**: New due date (optional, format: YYYY-MM-DD)
+    - **is_completed**: Completion status (optional, boolean)
+    
+    Returns 404 if todo doesn't exist or doesn't belong to the user.
+    """
+    # Get todo with authorization check
+    todo = get_todo_by_id(db, todo_id, str(current_user.id))
+    
+    if not todo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Todo not found"
+        )
+    
+    try:
+        # Update the todo
+        updated_todo = update_todo(db, todo, update_data)
+        
+        # Convert to response format
+        todo_dict = {
+            "id": str(updated_todo.id),
+            "user_id": str(updated_todo.user_id),
+            "title": updated_todo.title,
+            "description": updated_todo.description,
+            "priority": updated_todo.priority,
+            "due_date": updated_todo.due_date,
+            "is_completed": updated_todo.is_completed,
+            "created_at": updated_todo.created_at,
+            "updated_at": updated_todo.updated_at
+        }
+        
+        return TodoResponse(**todo_dict)
+    
+    except ValueError as e:
+        # No fields provided or validation error
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred while updating todo: {str(e)}"
+        )
