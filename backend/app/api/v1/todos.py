@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Path
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List
+from uuid import UUID
 from app.database import get_db
 from app.schemas.todo import (
     TodoCreate, 
@@ -140,9 +141,9 @@ def list_todos(
         )
 
 
-router.get("/{todo_id}", response_model=TodoResponse)
+@router.get("/{todo_id}", response_model=TodoResponse)
 def get_todo(
-    todo_id: str = Path(..., description="Todo ID (UUID)"),
+    todo_id: UUID,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -156,7 +157,7 @@ def get_todo(
     Returns 404 if todo doesn't exist or doesn't belong to the user.
     """
     # Get todo with authorization check
-    todo = get_todo_by_id(db, todo_id, str(current_user.id))
+    todo = get_todo_by_id(db, str(todo_id), str(current_user.id))
     
     if not todo:
         # Return 404 whether todo doesn't exist or belongs to another user
