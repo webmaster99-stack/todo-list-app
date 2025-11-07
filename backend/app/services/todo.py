@@ -3,7 +3,7 @@ from sqlalchemy import case
 from typing import Optional, Tuple, List
 from app.models.todo import Todo, PriorityLevel
 from app.models.user import User
-from app.schemas.todo import TodoCreate, SortField, SortOrder, TodoUpdate
+from app.schemas.todo import TodoCreate, TodoUpdate, SortField, SortOrder
 import math
 
 
@@ -58,9 +58,12 @@ def update_todo(
     db: Session,
     todo: Todo,
     update_data: TodoUpdate
-) -> Todo:
+) -> Optional[Todo]:
     """
     Update a todo with new data.
+    
+    If is_completed is set to True, the todo is automatically deleted
+    and None is returned (as per requirements).
     
     Args:
         db: Database session
@@ -68,7 +71,7 @@ def update_todo(
         update_data: TodoUpdate schema with new values
         
     Returns:
-        Updated Todo object
+        Updated Todo object, or None if todo was completed and deleted
         
     Raises:
         ValueError: If no fields provided for update
@@ -79,15 +82,51 @@ def update_todo(
     if not update_dict:
         raise ValueError("At least one field must be provided for update")
     
-    # Update fields
+    # Check if marking as completed (auto-delete)
+    if update_dict.get('is_completed') == True:
+        # Delete the todo instead of updating
+        db.delete(todo)
+        db.commit()
+        return None  # Signal that todo was deleted
+    
+    # Update fields (excluding is_completed since we handle it above)
     for field, value in update_dict.items():
-        setattr(todo, field, value)
+        if field != 'is_completed':  # Skip is_completed
+            setattr(todo, field, value)
     
     # Commit changes (updated_at will be automatically updated)
     db.commit()
     db.refresh(todo)
     
     return todo
+
+
+def complete_and_delete_todo(db: Session, todo: Todo) -> None:
+    """
+    Mark a todo as completed and delete it (as per requirements).
+    
+    This is a non-reversible operation.
+    
+    Args:
+        db: Database session
+        todo: Todo object to complete and delete
+    """
+    # Simply delete the todo
+    # No need to mark as completed first since it's being deleted
+    db.delete(todo)
+    db.commit()
+
+
+def delete_todo(db: Session, todo: Todo) -> None:
+    """
+    Delete a todo (hard delete).
+    
+    Args:
+        db: Database session
+        todo: Todo object to delete
+    """
+    db.delete(todo)
+    db.commit()
 
 
 def get_user_todos(

@@ -1,24 +1,26 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Path
 from sqlalchemy.orm import Session
-from uuid import UUID
+from typing import List, Optional
 from app.database import get_db
 from app.schemas.todo import (
     TodoCreate, 
     TodoResponse, 
+    TodoUpdate,
     TodoListResponse,
     PaginationMetadata,
     SortField,
-    SortOrder,
-    TodoUpdate
+    SortOrder
 )
 from app.api.deps import get_current_user
 from app.models.user import User
 from app.services.todo import (
-    create_todo,
-    get_todo_by_id, 
-    get_user_todos,
+    create_todo, 
+    get_user_todos, 
+    calculate_total_pages,
+    get_todo_by_id,
     update_todo,
-    calculate_total_pages
+    complete_and_delete_todo,
+    delete_todo
 )
 
 router = APIRouter()
@@ -144,7 +146,7 @@ def list_todos(
 
 @router.get("/{todo_id}", response_model=TodoResponse)
 def get_todo(
-    todo_id: UUID,
+    todo_id: str = Path(..., description="Todo ID (UUID)"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -158,7 +160,7 @@ def get_todo(
     Returns 404 if todo doesn't exist or doesn't belong to the user.
     """
     # Get todo with authorization check
-    todo = get_todo_by_id(db, str(todo_id), str(current_user.id))
+    todo = get_todo_by_id(db, todo_id, str(current_user.id))
     
     if not todo:
         # Return 404 whether todo doesn't exist or belongs to another user
@@ -184,9 +186,9 @@ def get_todo(
     return TodoResponse(**todo_dict)
 
 
-@router.put("/{todo_id}", response_model=TodoResponse)
+@router.put("/{todo_id}", response_model=Optional[TodoResponse])
 def update_todo_endpoint(
-    todo_id: UUID,
+    todo_id: str = Path(..., description="Todo ID (UUID)"),
     update_data: TodoUpdate = ...,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -197,13 +199,17 @@ def update_todo_endpoint(
     Requires authentication. Users can only update their own todos.
     All fields are optional - provide only the fields you want to update.
     
+    **IMPORTANT**: If you set is_completed to true, the todo will be automatically
+    deleted and this endpoint will return 204 No Content (as per requirements).
+    
     - **title**: New title (optional, max 200 characters)
     - **description**: New description (optional)
     - **priority**: New priority (optional, must be 'low', 'medium', or 'high')
     - **due_date**: New due date (optional, format: YYYY-MM-DD)
-    - **is_completed**: Completion status (optional, boolean)
+    - **is_completed**: Completion status (optional, boolean) - **AUTO-DELETES if set to true**
     
     Returns 404 if todo doesn't exist or doesn't belong to the user.
+    Returns 204 No Content if todo was marked complete and deleted.
     """
     # Get todo with authorization check
     todo = get_todo_by_id(db, todo_id, str(current_user.id))
@@ -215,8 +221,12 @@ def update_todo_endpoint(
         )
     
     try:
-        # Update the todo
+        # Update the todo (may return None if completed and deleted)
         updated_todo = update_todo(db, todo, update_data)
+        
+        # If None, todo was completed and deleted
+        if updated_todo is None:
+            return None  # FastAPI will return 204 No Content
         
         # Convert to response format
         todo_dict = {
@@ -244,3 +254,72 @@ def update_todo_endpoint(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An error occurred while updating todo: {str(e)}"
         )
+
+
+@router.post("/{todo_id}/complete", status_code=status.HTTP_204_NO_CONTENT)
+def complete_todo(
+    todo_id: str = Path(..., description="Todo ID (UUID)"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Mark a todo as completed and delete it.
+    
+    **WARNING: This action is irreversible!**
+    
+    Requires authentication. Users can only complete their own todos.
+    The todo is automatically deleted when marked as completed (as per requirements).
+    
+    - **todo_id**: UUID of the todo to complete
+    
+    Returns 204 No Content on success.
+    Returns 404 if todo doesn't exist or doesn't belong to the user.
+    """
+    # Get todo with authorization check
+    todo = get_todo_by_id(db, todo_id, str(current_user.id))
+    
+    if not todo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Todo not found"
+        )
+    
+    # Complete and delete the todo
+    complete_and_delete_todo(db, todo)
+    
+    # Return 204 No Content
+    return None
+
+
+@router.delete("/{todo_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_todo_endpoint(
+    todo_id: str = Path(..., description="Todo ID (UUID)"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Delete a todo (hard delete).
+    
+    **WARNING: This action is irreversible!**
+    
+    Requires authentication. Users can only delete their own todos.
+    
+    - **todo_id**: UUID of the todo to delete
+    
+    Returns 204 No Content on success.
+    Returns 404 if todo doesn't exist or doesn't belong to the user.
+    """
+    # Get todo with authorization check
+    todo = get_todo_by_id(db, todo_id, str(current_user.id))
+    
+    if not todo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Todo not found"
+        )
+    
+    # Delete the todo
+    delete_todo(db, todo)
+    
+    # Return 204 No Content
+    return None
