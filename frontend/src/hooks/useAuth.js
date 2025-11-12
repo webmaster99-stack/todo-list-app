@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { authAPI, userAPI, setAuthToken, clearAuth } from '../Lib/api';
+import useAuthStore from '../stores/authStore';
 
 // Query keys
 export const authKeys = {
@@ -11,14 +12,16 @@ export const authKeys = {
 // QUERY: Get current user profile
 // ============================================
 export function useProfile() {
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  
   return useQuery({
     queryKey: authKeys.profile,
     queryFn: async () => {
       const response = await userAPI.getProfile();
       return response.data;
     },
-    // Only fetch if token exists
-    enabled: !!localStorage.getItem('token'),
+    // Only fetch if authenticated
+    enabled: isAuthenticated,
     // Don't retry on 401 (unauthorized)
     retry: false,
   });
@@ -29,6 +32,7 @@ export function useProfile() {
 // ============================================
 export function useLogin() {
   const queryClient = useQueryClient();
+  const setAuth = useAuthStore((state) => state.setAuth);
 
   return useMutation({
     mutationFn: async ({ username, password }) => {
@@ -36,13 +40,11 @@ export function useLogin() {
       return response.data;
     },
     onSuccess: (data) => {
-      // Store token
+      // Store token in API client
       setAuthToken(data.access_token);
       
-      // Store user data if available
-      if (data.user) {
-        localStorage.setItem('user', JSON.stringify(data.user));
-      }
+      // Store in Zustand
+      setAuth(data.access_token, data.user || null);
       
       // Invalidate queries to refetch with new auth
       queryClient.invalidateQueries();
@@ -67,6 +69,7 @@ export function useRegister() {
 // ============================================
 export function useLogout() {
   const queryClient = useQueryClient();
+  const clearAuthState = useAuthStore((state) => state.clearAuth);
 
   return useMutation({
     mutationFn: async () => {
@@ -78,8 +81,11 @@ export function useLogout() {
       }
     },
     onSuccess: () => {
-      // Clear auth data
+      // Clear auth data from API client
       clearAuth();
+      
+      // Clear Zustand store
+      clearAuthState();
       
       // Clear all queries
       queryClient.clear();
@@ -92,13 +98,17 @@ export function useLogout() {
 // ============================================
 export function useUpdateProfile() {
   const queryClient = useQueryClient();
+  const updateUser = useAuthStore((state) => state.updateUser);
 
   return useMutation({
     mutationFn: async (data) => {
       const response = await userAPI.updateProfile(data);
       return response.data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      // Update user in store
+      updateUser(data);
+      
       // Refetch profile
       queryClient.invalidateQueries({ queryKey: authKeys.profile });
     },
@@ -110,6 +120,7 @@ export function useUpdateProfile() {
 // ============================================
 export function useDeleteAccount() {
   const queryClient = useQueryClient();
+  const clearAuthState = useAuthStore((state) => state.clearAuth);
 
   return useMutation({
     mutationFn: async (password) => {
@@ -118,6 +129,7 @@ export function useDeleteAccount() {
     onSuccess: () => {
       // Clear auth and all data
       clearAuth();
+      clearAuthState();
       queryClient.clear();
     },
   });

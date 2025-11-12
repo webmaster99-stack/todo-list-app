@@ -1,4 +1,4 @@
-import QueryTest from './components/QueryTest'
+import ZustandTest from './components/ZustandTest'
 
 function App() {
   return (
@@ -8,7 +8,7 @@ function App() {
           Todo List Application
         </h1>
         
-        <QueryTest />
+        <ZustandTest />
       </div>
     </div>
   )
