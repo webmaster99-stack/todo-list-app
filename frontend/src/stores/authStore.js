@@ -22,8 +22,9 @@ const useAuthStore = create(
           isAuthenticated: true,
         });
         
-        // Store in localStorage (handled by persist middleware)
+        // Store in localStorage (backup)
         localStorage.setItem('token', token);
+        localStorage.setItem('loginTime', now.toString());
         if (user) {
           localStorage.setItem('user', JSON.stringify(user));
         }
@@ -40,6 +41,7 @@ const useAuthStore = create(
         // Clear localStorage
         localStorage.removeItem('token');
         localStorage.removeItem('user');
+        localStorage.removeItem('loginTime');
       },
 
       updateUser: (userData) => {
@@ -71,42 +73,62 @@ const useAuthStore = create(
         return false; // Token still valid
       },
 
-      // Initialize auth from localStorage
+      // Initialize auth from localStorage - NOT NEEDED NOW, handled by onRehydrateStorage
       initAuth: () => {
-        const token = localStorage.getItem('token');
-        const userStr = localStorage.getItem('user');
-        const loginTime = localStorage.getItem('loginTime');
-        
-        if (token && loginTime) {
-          const now = Date.now();
-          const elapsed = now - parseInt(loginTime, 10);
-          
-          // Check if token expired
-          if (elapsed >= TOKEN_EXPIRY_MS) {
-            console.log('Stored token expired, clearing...');
-            get().clearAuth();
-            return;
-          }
-          
-          // Token still valid, restore session
-          const user = userStr ? JSON.parse(userStr) : null;
-          set({
-            token,
-            user,
-            loginTime: parseInt(loginTime, 10),
-            isAuthenticated: true,
-          });
+        // This is now handled automatically by persist middleware
+        // But we keep it for manual initialization if needed
+        const state = get();
+        if (state.token && state.loginTime && !state.isTokenExpired()) {
+          set({ isAuthenticated: true });
+        } else if (state.token && state.isTokenExpired()) {
+          get().clearAuth();
         }
       },
     }),
     {
       name: 'auth-storage', // localStorage key
       partialize: (state) => ({
-        // Only persist these fields
+        // Persist these fields
         token: state.token,
         user: state.user,
         loginTime: state.loginTime,
+        // Important: Also persist isAuthenticated
+        isAuthenticated: state.isAuthenticated,
       }),
+      // Handle rehydration (when loading from localStorage)
+      onRehydrateStorage: () => (state) => {
+        // This runs after state is loaded from localStorage
+        if (state) {
+          console.log('Rehydrating auth state...');
+          
+          // Check if we have a token
+          if (state.token && state.loginTime) {
+            const now = Date.now();
+            const elapsed = now - state.loginTime;
+            
+            // Check if token expired
+            if (elapsed >= TOKEN_EXPIRY_MS) {
+              console.log('Stored token expired during rehydration');
+              state.token = null;
+              state.user = null;
+              state.loginTime = null;
+              state.isAuthenticated = false;
+              
+              // Clean up localStorage
+              localStorage.removeItem('token');
+              localStorage.removeItem('user');
+              localStorage.removeItem('loginTime');
+            } else {
+              // Token still valid, ensure isAuthenticated is true
+              console.log('Restored valid auth session');
+              state.isAuthenticated = true;
+            }
+          } else {
+            // No token, ensure not authenticated
+            state.isAuthenticated = false;
+          }
+        }
+      },
     }
   )
 );
