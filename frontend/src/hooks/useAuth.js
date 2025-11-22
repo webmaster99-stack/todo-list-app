@@ -134,3 +134,27 @@ export function useDeleteAccount() {
     },
   });
 }
+
+// ============================================
+// MUTATION: Request Password Reset
+// ============================================
+export function useRequestPasswordReset() {
+  return useMutation({
+    mutationFn: async (username) => {
+      const response = await authAPI.requestPasswordReset(username);
+      return response.data;
+    },
+  });
+}
+
+// ============================================
+// MUTATION: Reset Password (with token)
+// ============================================
+export function useResetPassword() {
+  return useMutation({
+    mutationFn: async ({ token, newPassword }) => {
+      const response = await authAPI.resetPassword(token, newPassword);
+      return response.data;
+    },
+  });
+}
